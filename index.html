@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>朋友圈 MBTI 社交探测器</title>
+    <!-- Vant UI CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vant@4/lib/index.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f7f8fa; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, "Microsoft Yahei", sans-serif; }
+        .van-uploader__preview-delete { top: -8px; right: -8px; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    </style>
+</head>
+<body>
+    <div id="app" class="pb-10">
+        <!-- 头部 -->
+        <div class="gradient-bg text-white p-6 text-center shadow-lg">
+            <h1 class="text-2xl font-bold mb-2">朋友圈 MBTI 社交探测器</h1>
+            <p class="text-sm opacity-80">上传 5+ 张截图，深度洞察对方性格</p>
+        </div>
+
+        <!-- 主体 -->
+        <div class="p-4">
+            <!-- 上传区域 -->
+            <div class="bg-white rounded-xl p-4 shadow-sm mb-4">
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-gray-700 font-medium">上传朋友圈截图 (需 5 张以上)</span>
+                    <span class="text-xs text-gray-400">{{ fileList.length }} 张</span>
+                </div>
+                <van-uploader 
+                    v-model="fileList" 
+                    multiple 
+                    :max-count="20"
+                    upload-text="点击上传"
+                    :after-read="afterRead"
+                ></van-uploader>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="mt-6">
+                <van-button 
+                    type="primary" 
+                    block 
+                    round 
+                    size="large"
+                    color="linear-gradient(to right, #667eea, #764ba2)"
+                    :loading="analyzing"
+                    loading-text="AI 深度分析中..."
+                    :disabled="fileList.length < 5"
+                    @click="startAnalysis"
+                >
+                    {{ fileList.length < 5 ? '请至少上传 5 张截图' : '开始 AI 深度分析' }}
+                </van-button>
+            </div>
+
+            <!-- 分析结果 -->
+            <div v-if="result" class="mt-8 bg-white rounded-xl p-6 shadow-md animate__animated animate__fadeIn">
+                <div class="text-center mb-6">
+                    <div class="text-4xl font-bold text-purple-600 mb-2">{{ result.mbti }}</div>
+                    <div class="text-gray-500 text-sm">MBTI 性格类型</div>
+                </div>
+
+                <div class="mb-6">
+                    <h3 class="font-bold text-lg mb-2 flex items-center">
+                        <span class="w-1 h-5 bg-purple-500 rounded mr-2"></span>性格画像
+                    </h3>
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        <span v-for="tag in result.tags" :key="tag" class="px-2 py-1 bg-purple-50 text-purple-600 text-xs rounded border border-purple-100">
+                            # {{ tag }}
+                        </span>
+                    </div>
+                    <p class="text-gray-600 text-sm leading-relaxed">{{ result.description }}</p>
+                </div>
+
+                <div class="mb-6">
+                    <h3 class="font-bold text-lg mb-2 flex items-center">
+                        <span class="w-1 h-5 bg-blue-500 rounded mr-2"></span>社交破冰建议
+                    </h3>
+                    <p class="text-gray-600 text-sm leading-relaxed">{{ result.socialTips }}</p>
+                </div>
+
+                <div class="mb-6">
+                    <h3 class="font-bold text-lg mb-2 flex items-center">
+                        <span class="w-1 h-5 bg-green-500 rounded mr-2"></span>商务转化策略
+                    </h3>
+                    <p class="text-gray-600 text-sm leading-relaxed">{{ result.businessStrategy }}</p>
+                </div>
+                
+                <van-button block plain round type="primary" @click="reset">重新分析</van-button>
+            </div>
+        </div>
+
+        <!-- 底部说明 -->
+        <div class="text-center text-xs text-gray-400 mt-4 px-10">
+            仅用于社交分析，图片在浏览器本地处理，不保存至服务器，保护隐私。
+        </div>
+    </div>
+
+    <!-- Vue 3 & Vant JS -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vant@4/lib/vant.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <script>
+        const { createApp, ref } = Vue;
+
+        createApp({
+            setup() {
+                const fileList = ref([]);
+                const analyzing = ref(false);
+                const result = ref(null);
+
+                const afterRead = (file) => {
+                    // 可以在这里做一些图片压缩或预处理
+                };
+
+                const startAnalysis = async () => {
+                    if (fileList.value.length < 5) return;
+                    
+                    analyzing.value = true;
+                    try {
+                        // 准备上传数据
+                        const formData = new FormData();
+                        
+                        // 图片压缩处理
+                        const compressImage = (file) => {
+                            return new Promise((resolve) => {
+                                const reader = new FileReader();
+                                reader.readAsDataURL(file);
+                                reader.onload = (e) => {
+                                    const img = new Image();
+                                    img.src = e.target.result;
+                                    img.onload = () => {
+                                        const canvas = document.createElement('canvas');
+                                        let width = img.width;
+                                        let height = img.height;
+                                        
+                                        // 限制最大宽度/高度为 1200px
+                                        const maxSide = 1200;
+                                        if (width > maxSide || height > maxSide) {
+                                            if (width > height) {
+                                                height = (height / width) * maxSide;
+                                                width = maxSide;
+                                            } else {
+                                                width = (width / height) * maxSide;
+                                                height = maxSide;
+                                            }
+                                        }
+                                        
+                                        canvas.width = width;
+                                        canvas.height = height;
+                                        const ctx = canvas.getContext('2d');
+                                        ctx.drawImage(img, 0, 0, width, height);
+                                        
+                                        canvas.toBlob((blob) => {
+                                            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                                        }, 'image/jpeg', 0.8); // 80% 质量压缩
+                                    };
+                                };
+                            });
+                        };
+
+                        // 批量压缩并添加
+                        for (let i = 0; i < fileList.value.length; i++) {
+                            const compressedFile = await compressImage(fileList.value[i].file);
+                            formData.append(`file_${i}`, compressedFile);
+                        }
+
+                        // 调用后端代理 API
+                        const response = await axios.post('/api/analyze', formData, {
+                            headers: { 'Content-Type': 'multipart/form-data' },
+                            timeout: 130000 // 前端稍微设长一点点
+                        });
+
+                        result.value = response.data;
+                        vant.showSuccessToast('分析完成');
+                    } catch (error) {
+                        console.error('分析失败:', error);
+                        
+                        // 提取更详细的错误信息
+                        let msg = '分析超时或服务故障，请重试';
+                        let detail = '';
+                        
+                        if (error.response?.data) {
+                            msg = error.response.data.error || msg;
+                            detail = JSON.stringify(error.response.data.details || error.response.data, null, 2);
+                        } else if (error.message) {
+                            detail = error.message;
+                        }
+
+                        vant.showDialog({
+                            title: '分析失败',
+                            message: `${msg}\n\n详细信息:\n${detail}`,
+                            theme: 'round-button',
+                            messageAlign: 'left',
+                        });
+                    } finally {
+                        analyzing.value = false;
+                    }
+                };
+
+                const reset = () => {
+                    fileList.value = [];
+                    result.value = null;
+                };
+
+                return {
+                    fileList,
+                    analyzing,
+                    result,
+                    afterRead,
+                    startAnalysis,
+                    reset
+                };
+            }
+        })
+        .use(vant)
+        .mount('#app');
+    </script>
+</body>
+</html>
