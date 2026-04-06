@@ -1,0 +1,16 @@
+# 忽略API密钥等环境变量文件
+.env
+.env.*
+!.env.example
+
+# 忽略依赖包文件夹（不需要上传GitHub）
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# 编辑器配置与系统垃圾文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

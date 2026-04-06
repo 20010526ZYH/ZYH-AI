@@ -185,8 +185,9 @@
                         let detail = '';
                         
                         if (error.response?.data) {
-                            msg = error.response.data.error || msg;
-                            detail = JSON.stringify(error.response.data.details || error.response.data, null, 2);
+                            const errorData = error.response.data;
+                            msg = errorData.error?.message || errorData.error || msg;
+                            detail = typeof errorData === 'object' ? JSON.stringify(errorData, null, 2) : errorData;
                         } else if (error.message) {
                             detail = error.message;
                         }
