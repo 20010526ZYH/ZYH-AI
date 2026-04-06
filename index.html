@@ -27,13 +27,13 @@
             <!-- 上传区域 -->
             <div class="bg-white rounded-xl p-4 shadow-sm mb-4">
                 <div class="flex justify-between items-center mb-4">
-                    <span class="text-gray-700 font-medium">上传朋友圈截图 (5-8 张)</span>
-                    <span class="text-xs text-gray-400">{{ fileList.length }} / 8 张</span>
+                    <span class="text-gray-700 font-medium">上传朋友圈截图 (5-6 张)</span>
+                    <span class="text-xs text-gray-400">{{ fileList.length }} / 6 张</span>
                 </div>
                 <van-uploader 
                     v-model="fileList" 
                     multiple 
-                    :max-count="8"
+                    :max-count="6"
                     upload-text="点击上传"
                     :after-read="afterRead"
                 ></van-uploader>
@@ -52,7 +52,7 @@
                     :disabled="fileList.length < 5"
                     @click="startAnalysis"
                 >
-                    {{ fileList.length < 5 ? '请至少上传 5 张截图' : '开始 AI 深度分析' }}
+                    {{ fileList.length < 5 ? `还差 ${5 - fileList.length} 张截图` : '开始 AI 深度分析' }}
                 </van-button>
             </div>
 

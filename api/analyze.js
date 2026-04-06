@@ -5,32 +5,33 @@ const multer = require('multer');
 // 环境变量配置
 const ARK_API_KEY = process.env.ARK_API_KEY;
 const MODEL_ID = "ep-20260405192616-2nq8w";
-const REGIONS = [
-  "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-  "https://ark.cn-shanghai.volces.com/api/v3/chat/completions"
-];
+const API_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
 
-// 优化 Multer 配置：限制单文件 3MB，最多 8 张图，减少 Vercel 处理负载
+// 极致优化 Multer：2MB/张，最多 6 张，极速处理
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: { 
-    fileSize: 3 * 1024 * 1024, // 3MB
-    files: 8                   // 最多 8 张
+    fileSize: 2 * 1024 * 1024, // 2MB
+    files: 6                   // 最多 6 张
   }
 });
 
 module.exports = async (req, res) => {
-  // CORS 跨域处理
+  // CORS 跨域
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: '仅支持 POST 请求' });
+  if (req.method !== 'POST') return res.status(405).json({ error: '仅支持 POST' });
+
+  // 增加 AbortController 确保超时绝对生效
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s 强行中断
 
   try {
-    // 1. 解析文件上传
+    // 1. 解析上传
     await new Promise((resolve, reject) => {
       upload.any()(req, res, (err) => {
         if (err) reject(err);
@@ -39,11 +40,11 @@ module.exports = async (req, res) => {
     });
 
     if (!req.files || req.files.length < 5) {
-      return res.status(400).json({ error: '请上传 5-8 张朋友圈截图' });
+      return res.status(400).json({ error: '请上传 5-6 张截图' });
     }
 
-    // 2. 精简 Prompt，减少 AI 思考时间，降低超时风险
-    const promptText = "作为 MBTI 专家，请分析朋友圈截图并返回 JSON：{mbti, tags:[], description, socialTips, businessStrategy}。要求：1.性格描述用'她/他'称呼。2.社交建议与商务策略各写成一段话。直接输出 JSON，禁止 Markdown。";
+    // 2. 极致精简 Prompt：减少 Token 消耗，缩短 AI 思考与响应时长
+    const promptText = "分析朋友圈图返回JSON:{mbti,tags:[],description,socialTips,businessStrategy}。要求:用'她/他'称呼，描述与建议各一段话。只出JSON，禁Markdown。";
 
     const requestBody = {
       model: MODEL_ID,
@@ -63,51 +64,35 @@ module.exports = async (req, res) => {
       ]
     };
 
-    // 3. 多区域快速重试逻辑：单区域 20s 超时，总时长控制在 60s 内
-    let response = null;
-    let lastError = null;
+    // 3. 单区域请求 + 30s 超时控制
+    const apiRes = await axios.post(API_URL, requestBody, {
+      headers: {
+        'Authorization': `Bearer ${ARK_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      signal: controller.signal, // 绑定 abort 信号
+      timeout: 30000             // axios 内部超时
+    });
 
-    for (const url of REGIONS) {
-      try {
-        console.log(`[API] 尝试区域: ${url}`);
-        const apiRes = await axios.post(url, requestBody, {
-          headers: {
-            'Authorization': `Bearer ${ARK_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 20000 // 缩短为 20s，以便在 Vercel 60s 限制内尝试多个区域
-        });
-        response = apiRes;
-        break;
-      } catch (err) {
-        lastError = err;
-        const status = err.response ? err.response.status : 500;
-        console.warn(`[Warn] 区域失败 (${url}): ${status}`);
-        if (status !== 404) throw err; // 非 404 错误（如 401/400）不重试
-      }
+    clearTimeout(timeoutId); // 成功则清除定时器
+
+    const content = apiRes.data.choices[0].message.content.trim();
+    
+    // 4. 极简解析
+    let jsonStr = content;
+    if (content.includes('```')) {
+      const match = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (match) jsonStr = match[1];
     }
-
-    if (!response) throw lastError;
-
-    // 4. 解析 AI 返回内容
-    const content = response.data.choices[0].message.content;
-    try {
-      let jsonStr = content.trim();
-      // 容错处理：提取 JSON 代码块
-      if (jsonStr.includes('```')) {
-        const match = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (match) jsonStr = match[1];
-      }
-      return res.json(JSON.parse(jsonStr));
-    } catch (e) {
-      console.error('[Error] 解析失败:', content);
-      return res.status(500).json({ error: 'AI 格式异常', raw: content });
-    }
+    
+    return res.json(JSON.parse(jsonStr));
 
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError' || error.code === 'ECONNABORTED') {
+      return res.status(504).json({ error: '分析超时，请减少图片大小或重试' });
+    }
     const status = error.response ? error.response.status : 500;
-    const details = error.response ? error.response.data : error.message;
-    console.error(`[Error] ${status}:`, details);
-    return res.status(status).json({ error: '分析失败，请稍后重试', details });
+    return res.status(status).json({ error: '分析失败', details: error.message });
   }
 };
