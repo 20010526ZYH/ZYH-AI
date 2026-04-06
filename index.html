@@ -27,13 +27,13 @@
             <!-- 上传区域 -->
             <div class="bg-white rounded-xl p-4 shadow-sm mb-4">
                 <div class="flex justify-between items-center mb-4">
-                    <span class="text-gray-700 font-medium">上传朋友圈截图 (需 5 张以上)</span>
-                    <span class="text-xs text-gray-400">{{ fileList.length }} 张</span>
+                    <span class="text-gray-700 font-medium">上传朋友圈截图 (5-8 张)</span>
+                    <span class="text-xs text-gray-400">{{ fileList.length }} / 8 张</span>
                 </div>
                 <van-uploader 
                     v-model="fileList" 
                     multiple 
-                    :max-count="20"
+                    :max-count="8"
                     upload-text="点击上传"
                     :after-read="afterRead"
                 ></van-uploader>
